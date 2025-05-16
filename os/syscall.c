@@ -240,3 +240,7 @@ void syscall() {
     trapframe->a0 = ret;
     tracef("syscall ret %d", ret);
 }
+
+void sigreturn() {
+    __asm__ volatile("li a7, 31\n\tecall");
+}

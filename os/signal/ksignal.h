@@ -9,6 +9,8 @@ struct ksignal {
     siginfo_t siginfos[SIGMAX + 1];
     sigset_t sigmask;       // signal mask, when set to 1, the signal is blocked
     sigset_t sigpending;
+    int handling_depth;
+
 };
 
 struct proc;  // forward declaration
