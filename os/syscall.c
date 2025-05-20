@@ -54,7 +54,7 @@ int64 sys_exec(uint64 __user path, uint64 __user argv) {
     }
     return ret;
 
-free:
+    free:
     release(&p->mm->lock);
     kfree(&kstrbuf, kpath);
     for (int i = 0; arg[i]; i++) {
