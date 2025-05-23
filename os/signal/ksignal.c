@@ -96,31 +96,36 @@ int siginit(struct proc *p) {
 }
 
 int siginit_fork(struct proc *parent, struct proc *child) {
-    for (int i = SIGMIN; i <= SIGMAX; i++) {
-        child->signal.sa[i] = parent->signal.sa[i];
+    for (int signo = SIGMIN; signo <= SIGMAX; signo++) {
+        child->signal.sa[signo] = parent->signal.sa[signo];
     }
+
     child->signal.sigmask = parent->signal.sigmask;
-    child->signal.sigpending = 0;
+    sigemptyset(&child->signal.sigpending);
     return 0;
 }
 
+
 int siginit_exec(struct proc *p) {
-    sigset_t ignored = 0;
-    for (int i = SIGMIN; i <= SIGMAX; i++) {
-        if (p->signal.sa[i].sa_sigaction == SIG_IGN) {
-            sigaddset(&ignored, i);
+    sigset_t ignored_set = 0;
+
+    for (int signo = SIGMIN; signo <= SIGMAX; signo++) {
+        if (p->signal.sa[signo].sa_sigaction == SIG_IGN) {
+            sigaddset(&ignored_set, signo);
         }
     }
 
-    for (int i = SIGMIN; i <= SIGMAX; i++) {
-        p->signal.sa[i].sa_sigaction = SIG_DFL;
-        p->signal.sa[i].sa_mask = 0;
-        p->signal.sa[i].sa_restorer = 0;
+    // Reset all signal handlers to default
+    for (int signo = SIGMIN; signo <= SIGMAX; signo++) {
+        p->signal.sa[signo].sa_sigaction = SIG_DFL;
+        p->signal.sa[signo].sa_mask = 0;
+        p->signal.sa[signo].sa_restorer = NULL;
     }
 
-    for (int i = SIGMIN; i <= SIGMAX; i++) {
-        if (sigismember(&ignored, i)) {
-            p->signal.sa[i].sa_sigaction = SIG_IGN;
+    // Restore manually ignored signals
+    for (int signo = SIGMIN; signo <= SIGMAX; signo++) {
+        if (sigismember(&ignored_set, signo)) {
+            p->signal.sa[signo].sa_sigaction = SIG_IGN;
         }
     }
 
@@ -143,6 +148,12 @@ int do_signal(void) {
         }
 
         sigaction_t *sa = &p->signal.sa[signo];
+        if (signo == SIGKILL) {
+            setkilled(p, -10 - SIGKILL);
+            sigdelset(&p->signal.sigpending, SIGKILL);
+            return 0;
+        }
+
         if (sa->sa_sigaction == SIG_IGN) {
             sigdelset(&p->signal.sigpending, signo);
         } else if (sa->sa_sigaction == SIG_DFL) {
@@ -202,9 +213,21 @@ return -EINVAL;
 }
 
 
-if (signo == SIGKILL) {
-return -EINVAL;
+if (signo == SIGKILL && act) {
+    // Can't override SIGKILL's behavior
+    sigaction_t tmp;
+    acquire(&p->mm->lock);
+    if (copy_from_user(p->mm, (char*)&tmp, (uint64)act, sizeof(sigaction_t)) < 0) {
+        release(&p->mm->lock);
+        return -1;
+    }
+    release(&p->mm->lock);
+
+    if (tmp.sa_sigaction != SIG_DFL) {
+        return -EINVAL;
+    }
 }
+
 
 if (oldact) {
 acquire(&p->mm->lock);
@@ -297,8 +320,54 @@ int sys_sigreturn() {
 
 
 int sys_sigprocmask(int how, const sigset_t __user *set, sigset_t __user *oldset) {
-return 0;
+    struct proc *p = curr_proc();
+    struct mm *mm = p->mm;
+    sigset_t temp;
+
+    acquire(&p->lock);
+
+    if (oldset) {
+        acquire(&mm->lock);
+        if (copy_to_user(mm, (uint64)oldset, (char*)&p->signal.sigmask, sizeof(sigset_t)) < 0) {
+            release(&mm->lock);
+            release(&p->lock);
+            return -1;
+        }
+        release(&mm->lock);
+    }
+
+    if (set) {
+        acquire(&mm->lock);
+        if (copy_from_user(mm, (char*)&temp, (uint64)set, sizeof(sigset_t)) < 0) {
+            release(&mm->lock);
+            release(&p->lock);
+            return -1;
+        }
+        release(&mm->lock);
+
+        // Prevent SIGKILL from being masked
+        temp &= ~sigmask(SIGKILL);
+
+        switch (how) {
+            case SIG_BLOCK:
+                p->signal.sigmask |= temp;
+                break;
+            case SIG_UNBLOCK:
+                p->signal.sigmask &= ~temp;
+                break;
+            case SIG_SETMASK:
+                p->signal.sigmask = temp;
+                break;
+            default:
+                release(&p->lock);
+                return -1;
+        }
+    }
+
+    release(&p->lock);
+    return 0;
 }
+
 
 int sys_sigpending(sigset_t __user *set) {
 struct proc *p = curr_proc();
