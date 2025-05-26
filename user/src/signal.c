@@ -1,6 +1,7 @@
 #include "../../os/ktest/ktest.h"
 #include "../lib/user.h"
 #include "signal-project-tests/basic.c"
+#include "signal-project-tests/bonus.c"
 // basic 1-3
 
 struct test {
@@ -18,6 +19,7 @@ struct test {
     {basic10, "basic10"},
     {basic11, "basic11"},
     {basic20, "basic20"},
+    {siginfo_bonus, "siginfo-bonus"},
     {NULL,    NULL     },
 };
 

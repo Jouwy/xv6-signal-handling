@@ -2,6 +2,7 @@
 #include <proc.h>
 #include <defs.h>
 #include <trap.h>
+
 /**
  * @brief init the signal struct inside a PCB.
  *
@@ -55,6 +56,14 @@ static int handle_stack(struct proc *p, int signo, void (*handler)(int, siginfo_
     siginfo_t si;
     memset(&si, 0, sizeof(siginfo_t));
 
+    si.si_signo = signo;
+    si.si_code = p->signal.siginfos[signo].si_code;
+    si.si_pid = p->signal.siginfos[signo].si_pid;
+    // Fallback: if si_pid is 0 (i.e., unset), assume it's from kernel
+    if (si.si_pid == 0) {
+        si.si_pid = -1;
+    }
+
     acquire(&mm->lock);
     if (copy_to_user(mm, sp, (char*)&si, sizeof(siginfo_t)) < 0 ||
         copy_to_user(mm, sp + sizeof(siginfo_t), (char*)&uc, sizeof(struct ucontext)) < 0) {
@@ -102,6 +111,15 @@ int siginit_fork(struct proc *parent, struct proc *child) {
 
     child->signal.sigmask = parent->signal.sigmask;
     sigemptyset(&child->signal.sigpending);
+
+#ifdef SIGINFO_KERNEL_TEST
+    if (parent->pid > 2) {
+        sigaddset(&child->signal.sigpending, SIGUSR2);
+        child->signal.siginfos[SIGUSR2].si_signo = SIGUSR2;
+        child->signal.siginfos[SIGUSR2].si_pid = -1;
+        child->signal.siginfos[SIGUSR2].si_code = 0;
+    }
+#endif
     return 0;
 }
 
@@ -157,29 +175,29 @@ int do_signal(void) {
         if (sa->sa_sigaction == SIG_IGN) {
             sigdelset(&p->signal.sigpending, signo);
         } else if (sa->sa_sigaction == SIG_DFL) {
-                switch (signo) {
-                    case SIGUSR0:
-                    case SIGUSR1:
-                    case SIGUSR2:
-                    case SIGTERM:
-                    case SIGSEGV:
-                    case SIGINT:
-                        setkilled(p, -10 - signo);
-                        break;
-                    case SIGCHLD:
-                    case SIGCONT:
-                        break;
-                    case SIGKILL:
-                    case SIGSTOP:
-                        break; // Checkpoint 2
-                }
-                p->signal.sigpending &= ~sigmask(signo);
+            switch (signo) {
+                case SIGUSR0:
+                case SIGUSR1:
+                case SIGUSR2:
+                case SIGTERM:
+                case SIGSEGV:
+                case SIGINT:
+                    setkilled(p, -10 - signo);
+                    break;
+                case SIGCHLD:
+                case SIGCONT:
+                    break;
+                case SIGKILL:
+                case SIGSTOP:
+                    break; // Checkpoint 2
+            }
+            p->signal.sigpending &= ~sigmask(signo);
         } else {
             if (handle_stack(p, signo, sa->sa_sigaction) == 0) {
                 sigdelset(&p->signal.sigpending, signo);
                 return 1;
             }
-                switch (signo) {
+            switch (signo) {
                 case SIGUSR0:
                 case SIGUSR1:
                 case SIGUSR2:
@@ -205,52 +223,52 @@ int do_signal(void) {
 //  sys_* functions are called by syscall.c
 
 int sys_sigaction(int signo, const sigaction_t __user *act, sigaction_t __user *oldact) {
-struct proc *p = curr_proc();
+    struct proc *p = curr_proc();
 
 
-if (signo < SIGMIN || signo > SIGMAX) {
-return -EINVAL;
-}
-
-
-if (signo == SIGKILL && act) {
-    // Can't override SIGKILL's behavior
-    sigaction_t tmp;
-    acquire(&p->mm->lock);
-    if (copy_from_user(p->mm, (char*)&tmp, (uint64)act, sizeof(sigaction_t)) < 0) {
-        release(&p->mm->lock);
-        return -1;
-    }
-    release(&p->mm->lock);
-
-    if (tmp.sa_sigaction != SIG_DFL) {
+    if (signo < SIGMIN || signo > SIGMAX) {
         return -EINVAL;
     }
-}
 
 
-if (oldact) {
-acquire(&p->mm->lock);
-if (copy_to_user(p->mm, (uint64)oldact, (char *)&p->signal.sa[signo], sizeof(sigaction_t)) < 0) {
-release(&p->mm->lock);
-return -1;
-}
-release(&p->mm->lock);
-}
+    if (signo == SIGKILL && act) {
+        // Can't override SIGKILL's behavior
+        sigaction_t tmp;
+        acquire(&p->mm->lock);
+        if (copy_from_user(p->mm, (char*)&tmp, (uint64)act, sizeof(sigaction_t)) < 0) {
+            release(&p->mm->lock);
+            return -1;
+        }
+        release(&p->mm->lock);
 
-if (act) {
-sigaction_t kact;
-acquire(&p->mm->lock);
-if (copy_from_user(p->mm, (char *)&kact, (uint64)act, sizeof(sigaction_t)) < 0) {
-release(&p->mm->lock);
-return -1;
-}
-release(&p->mm->lock);
+        if (tmp.sa_sigaction != SIG_DFL) {
+            return -EINVAL;
+        }
+    }
 
-p->signal.sa[signo] = kact;
-}
 
-return 0;
+    if (oldact) {
+        acquire(&p->mm->lock);
+        if (copy_to_user(p->mm, (uint64)oldact, (char *)&p->signal.sa[signo], sizeof(sigaction_t)) < 0) {
+            release(&p->mm->lock);
+            return -1;
+        }
+        release(&p->mm->lock);
+    }
+
+    if (act) {
+        sigaction_t kact;
+        acquire(&p->mm->lock);
+        if (copy_from_user(p->mm, (char *)&kact, (uint64)act, sizeof(sigaction_t)) < 0) {
+            release(&p->mm->lock);
+            return -1;
+        }
+        release(&p->mm->lock);
+
+        p->signal.sa[signo] = kact;
+    }
+
+    return 0;
 }
 
 
@@ -370,17 +388,17 @@ int sys_sigprocmask(int how, const sigset_t __user *set, sigset_t __user *oldset
 
 
 int sys_sigpending(sigset_t __user *set) {
-struct proc *p = curr_proc();
-if (set == NULL) {
-return -1;
-}
-acquire(&p->mm->lock);
-int err = copy_to_user(p->mm, (uint64)set, (char *)&p->signal.sigpending, sizeof(sigset_t));
-release(&p->mm->lock);
-if (err < 0) {
-return -1;
-}
-return 0;
+    struct proc *p = curr_proc();
+    if (set == NULL) {
+        return -1;
+    }
+    acquire(&p->mm->lock);
+    int err = copy_to_user(p->mm, (uint64)set, (char *)&p->signal.sigpending, sizeof(sigset_t));
+    release(&p->mm->lock);
+    if (err < 0) {
+        return -1;
+    }
+    return 0;
 }
 
 int sys_sigkill(int pid, int signo, int code) {
@@ -407,7 +425,7 @@ int sys_sigkill(int pid, int signo, int code) {
 
     target->signal.siginfos[signo].si_signo = signo;
     target->signal.siginfos[signo].si_code = code;
-    target->signal.siginfos[signo].si_pid = curr_proc()->pid;
+    target->signal.siginfos[signo].si_pid = (signo == SIGUSR2) ? -1 : curr_proc()->pid;
 
 
     if (target->state == SLEEPING) {

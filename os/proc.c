@@ -349,6 +349,19 @@ void exit(int code) {
     p->exit_code = code;
     p->state     = ZOMBIE;
 
+    if (p->parent != NULL &&
+        p->parent->signal.sa[SIGCHLD].sa_sigaction != SIG_DFL &&
+        p->parent->signal.sa[SIGCHLD].sa_sigaction != SIG_IGN) {
+
+        sigaddset(&p->parent->signal.sigpending, SIGCHLD);
+        p->parent->signal.siginfos[SIGCHLD].si_signo = SIGCHLD;
+        p->parent->signal.siginfos[SIGCHLD].si_pid = p->pid;
+        p->parent->signal.siginfos[SIGCHLD].si_code = code;
+        if (p->parent->state == SLEEPING) {
+            wakeup(p->parent->sleep_chan);
+        }
+    }
+
     release(&wait_lock);
 
     sched();
