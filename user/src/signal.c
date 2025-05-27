@@ -19,7 +19,8 @@ struct test {
     {basic10, "basic10"},
     {basic11, "basic11"},
     {basic20, "basic20"},
-    {siginfo_bonus, "siginfo-bonus"},
+    {siginfo, "siginfo"},
+    {sigchld,  "sigchld"},
     {NULL,    NULL     },
 };
 

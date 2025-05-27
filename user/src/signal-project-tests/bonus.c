@@ -30,7 +30,7 @@ void handler_siginfo(int signo, siginfo_t *info, void *ctx) {
     }
 }
 
-void siginfo_bonus(char *s) {
+void siginfo(char *s) {
     int pid = fork();
     if (pid == 0) {
         // child registers handlers for both signals
@@ -53,4 +53,41 @@ void siginfo_bonus(char *s) {
         wait(0, &status);
         assert_eq(status, 200);
     }
+}
+
+volatile int handler_done = 0;
+void handler_sigchld(int signo, siginfo_t *info, void *ctx) {
+    assert(signo == SIGCHLD);
+    assert(info != 0);
+
+    int status;
+    int pid = wait(-1, &status);
+
+    assert(info->si_signo == SIGCHLD);
+    assert(info->si_pid == pid);
+    assert(info->si_code == 123);
+
+    //fprintf(1, "SIGCHLD handler received. Child PID: %d Exit code: %d\n",
+            info->si_pid, info->si_code);
+
+    handler_done = 1;
+}
+
+void sigchld(char *s) {
+    sigaction_t sa;
+    sa.sa_sigaction = handler_sigchld;
+    sa.sa_restorer = sigreturn;
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGCHLD, &sa, 0);
+
+    int pid = fork();
+    if (pid == 0) {
+        exit(123);
+    }
+
+    while (!handler_done) {
+    }
+
+    //fprintf(1, "sigchld_bonus exiting with code 200\n");
+    exit(0);
 }
