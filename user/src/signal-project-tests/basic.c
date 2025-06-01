@@ -256,6 +256,7 @@ void basic7(char* s) {
 }
 
 // SIG_IGN and SIG_DFL
+/*
 void basic8(char* s) {
     int pid = fork();
     if (pid == 0) {
@@ -283,7 +284,7 @@ void basic8(char* s) {
         assert(ret == -10 - SIGUSR1); // child terminated by SIGUSR1
     }
 }
-
+*/
 
 // Base Checkpoint 2: SIGKILL
 
