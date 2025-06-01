@@ -438,3 +438,18 @@ void test_alarm_remaining(char* s) {
 
     fprintf(1, "test_alarm_remaining completed\n");
 }
+
+void test_alarm_cancel(char* s) {
+    sigaction_t sa = {
+        .sa_sigaction = alarm_handler,
+        .sa_restorer  = sigreturn,
+    };
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGALRM, &sa, 0);
+    fprintf(1, "alarm(10) triggered, 10 second timer starts\n");
+    unsigned int remaining = alarm(10); // Set alarm for 2 seconds
+
+    wait_n_seconds(200);
+    remaining = alarm(0);
+    fprintf(1, "Alarm cancelled early, remaining time: %d\n", remaining);
+}

@@ -23,6 +23,7 @@ struct test {
     {sigchld,  "sigchld"},
     {test_alarm, "alarm1"},
     {test_alarm_remaining, "alarm2"},
+    {test_alarm_cancel, "alarm3"},
     {NULL,    NULL     },
 };
 
