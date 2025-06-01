@@ -67,8 +67,7 @@ void handler_sigchld(int signo, siginfo_t *info, void *ctx) {
     assert(info->si_pid == pid);
     assert(info->si_code == 123);
 
-    //fprintf(1, "SIGCHLD handler received. Child PID: %d Exit code: %d\n",
-            info->si_pid, info->si_code);
+    //fprintf(1, "SIGCHLD handler received. Child PID: %d Exit code: %d\n",info->si_pid, info->si_code);
 
     handler_done = 1;
 }

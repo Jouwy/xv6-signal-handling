@@ -21,6 +21,8 @@ struct test {
     {basic20, "basic20"},
     {siginfo, "siginfo"},
     {sigchld,  "sigchld"},
+    {test_alarm, "alarm1"},
+    {test_alarm_remaining, "alarm2"},
     {NULL,    NULL     },
 };
 

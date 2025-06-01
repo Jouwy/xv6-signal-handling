@@ -362,3 +362,78 @@ void basic20(char *s) {
         assert(ret == 1); // child should not be terminated by SIGUSR0
     }
 }
+
+volatile int alarm_triggered = 0;
+
+void wait_n_seconds(int n) {
+    fprintf(1, "Waiting 2 seconds (busy-wait)...\n");
+    sleep(n);
+    fprintf(1, "Finished waiting 2 seconds.\n");
+}
+
+void alarm_handler(int signo, siginfo_t *info, void *ctx) {
+    assert(signo == SIGALRM);
+    alarm_triggered = 1;
+    fprintf(1, "Alarm triggered!\n");
+}
+
+void test_alarm(char* s) {
+    fprintf(1, "hi!\n");
+    sigaction_t sa = {
+        .sa_sigaction = alarm_handler,
+        .sa_restorer  = sigreturn,
+    };
+    fprintf(1, "hi2!\n");
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGALRM, &sa, 0);
+    fprintf(1, "hi3!\n");
+    unsigned int old = alarm(2); // Set alarm for 2 seconds
+    assert_eq(old, 0);      // Expect no previous alarm
+    fprintf(1, "hi4!\n");
+    while (!alarm_triggered); // Wait until alarm goes off
+    fprintf(1, "hi5!\n");
+    assert(alarm_triggered);
+}
+
+void test_alarm_remaining(char* s) {
+    fprintf(1, "Starting test_alarm_remaining\n");
+    sigaction_t sa = {
+        .sa_sigaction = alarm_handler,
+        .sa_restorer  = sigreturn,
+    };
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGALRM, &sa, 0);
+
+    // Set initial alarm for 5 seconds
+    unsigned int remaining = alarm(5);
+    fprintf(1, "alarm(5) returns remaining = %d\n", remaining);
+    assert_eq(remaining, 0); // No previous alarm
+
+    // Wait 2 seconds
+    wait_n_seconds(200);
+    // sleep(2)
+
+    // Set new alarm for 3 seconds
+    remaining = alarm(3);
+    fprintf(1, "alarm(3) returns remaining = %d\n", remaining);
+
+    // Wait for alarm to trigger
+    alarm_triggered = 0;
+    fprintf(1, "Waiting for alarm to trigger...\n");
+    while (!alarm_triggered);
+    assert(alarm_triggered);
+
+    // Set another alarm and cancel it
+    alarm_triggered = 0;
+    remaining = alarm(5);
+    fprintf(1, "alarm(5) returns remaining = %d\n", remaining);
+    assert_eq(remaining, 0);
+    wait_n_seconds(200);
+    remaining = alarm(0);
+    fprintf(1, "alarm(0) returns remaining = %d\n", remaining);
+    fprintf(1, "Waiting 5 seconds to confirm no alarm...\n");
+    sleep(5);
+    assert_eq(alarm_triggered, 0);
+
+    fprintf(1, "test_alarm_remaining completed\n");
+}

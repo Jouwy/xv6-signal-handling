@@ -123,7 +123,6 @@ int siginit_fork(struct proc *parent, struct proc *child) {
     return 0;
 }
 
-
 int siginit_exec(struct proc *p) {
     sigset_t ignored_set = 0;
 
@@ -176,6 +175,7 @@ int do_signal(void) {
             sigdelset(&p->signal.sigpending, signo);
         } else if (sa->sa_sigaction == SIG_DFL) {
             switch (signo) {
+                case SIGALRM:
                 case SIGUSR0:
                 case SIGUSR1:
                 case SIGUSR2:
@@ -198,6 +198,7 @@ int do_signal(void) {
                 return 1;
             }
             switch (signo) {
+                case SIGALRM:
                 case SIGUSR0:
                 case SIGUSR1:
                 case SIGUSR2:
@@ -206,7 +207,7 @@ int do_signal(void) {
                 case SIGINT:
                     setkilled(p, -10 - signo);
                     break;
-                case SIGCHLD:
+    case SIGCHLD:
                 case SIGCONT:
                     break;
                 case SIGKILL:
@@ -225,11 +226,9 @@ int do_signal(void) {
 int sys_sigaction(int signo, const sigaction_t __user *act, sigaction_t __user *oldact) {
     struct proc *p = curr_proc();
 
-
     if (signo < SIGMIN || signo > SIGMAX) {
         return -EINVAL;
     }
-
 
     if (signo == SIGKILL && act) {
         // Can't override SIGKILL's behavior
@@ -245,7 +244,6 @@ int sys_sigaction(int signo, const sigaction_t __user *act, sigaction_t __user *
             return -EINVAL;
         }
     }
-
 
     if (oldact) {
         acquire(&p->mm->lock);
@@ -270,7 +268,6 @@ int sys_sigaction(int signo, const sigaction_t __user *act, sigaction_t __user *
 
     return 0;
 }
-
 
 int sys_sigreturn() {
     struct proc *p = curr_proc();
@@ -336,7 +333,6 @@ int sys_sigreturn() {
     return 0;
 }
 
-
 int sys_sigprocmask(int how, const sigset_t __user *set, sigset_t __user *oldset) {
     struct proc *p = curr_proc();
     struct mm *mm = p->mm;
@@ -386,7 +382,6 @@ int sys_sigprocmask(int how, const sigset_t __user *set, sigset_t __user *oldset
     return 0;
 }
 
-
 int sys_sigpending(sigset_t __user *set) {
     struct proc *p = curr_proc();
     if (set == NULL) {
@@ -427,7 +422,6 @@ int sys_sigkill(int pid, int signo, int code) {
     target->signal.siginfos[signo].si_code = code;
     target->signal.siginfos[signo].si_pid = (signo == SIGUSR2) ? -1 : curr_proc()->pid;
 
-
     if (target->state == SLEEPING) {
         wakeup(target->sleep_chan);
     }
@@ -435,4 +429,82 @@ int sys_sigkill(int pid, int signo, int code) {
     release(&target->lock);
 
     return 0;
+}
+
+int sys_alarm(unsigned int seconds) {
+    struct proc *p = curr_proc();
+    
+    // Calculate remaining seconds from current alarm
+    unsigned int remaining = 0;
+  if (p->alarm_ticks > 0) {
+        extern uint64 ticks;
+        uint64 current_ticks;
+        acquire(&tickslock);
+        current_ticks = ticks;
+        release(&tickslock);
+        
+        if (p->alarm_ticks > current_ticks) {
+            // Each tick is 10ms, so 100 ticks = 1 second
+            remaining = (p->alarm_ticks - current_ticks + 99) / 100;
+        } 
+    }
+    
+    acquire(&p->lock);
+    // Set new alarm
+    if (seconds == 0) {
+        // Cancel alarm
+        p->alarm_ticks = 0;
+        p->alarm_interval = 0;
+        sigdelset(&p->signal.sigpending, SIGALRM); // Clear pending SIGALRM
+    } else {
+        extern uint64 ticks;
+        uint64 current_ticks;
+        acquire(&tickslock);
+        current_ticks = ticks;
+        release(&tickslock);
+        
+        // Convert seconds to ticks (100 ticks per second)
+        p->alarm_interval = seconds * 100;
+        p->alarm_ticks = current_ticks + p->alarm_interval;
+    }
+    
+    release(&p->lock);
+    return remaining;
+}
+
+void check_alarms(void) {
+    extern uint64 ticks;
+    uint64 current_ticks;
+    
+    // Acquire tickslock once to get consistent tick value
+    acquire(&tickslock);
+    current_ticks = ticks;
+    release(&tickslock);
+    
+    for (int i = 0; i < NPROC; i++) {
+        struct proc *p = pool[i];
+        if (p->state == UNUSED) {
+            continue; // Skip unused processes
+        }
+        
+        acquire(&p->lock);
+        if (p->alarm_ticks > 0 && current_ticks >= p->alarm_ticks) {
+            // Alarm should trigger
+            sigaddset(&p->signal.sigpending, SIGALRM);
+            p->signal.siginfos[SIGALRM].si_signo = SIGALRM;
+            p->signal.siginfos[SIGALRM].si_pid = -1; // Kernel generated
+            p->signal.siginfos[SIGALRM].si_code = 0;
+            
+            // Clear the alarm
+            p->alarm_ticks = 0;
+            p->alarm_interval = 0;
+            
+            // Wake up the process if it's sleeping
+            if (p->state == SLEEPING) {
+                p->state = RUNNABLE;
+                add_task(p);
+            }
+        }
+        release(&p->lock);
+    }
 }

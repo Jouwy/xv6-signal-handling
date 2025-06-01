@@ -25,5 +25,6 @@ int sys_sigreturn();
 int sys_sigprocmask(int how, const sigset_t __user *set, sigset_t __user *oldset);
 int sys_sigpending(sigset_t __user *set);
 int sys_sigkill(int pid, int signo, int code);
-
+int sys_alarm(unsigned int seconds);
+void check_alarms(void);
 #endif

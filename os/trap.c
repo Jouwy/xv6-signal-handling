@@ -19,7 +19,6 @@ void plic_handle() {
     int irq = plic_claim();
     if (irq == uart0_irq) {
         uart_intr();
-        // printf("intr %d: UART0\n", r_tp());
     }
 
     if (irq)
@@ -31,12 +30,11 @@ static int handle_intr(void) {
     uint64 code  = cause & SCAUSE_EXCEPTION_CODE_MASK;
     if (code == SupervisorTimer) {
         tracef("time interrupt!");
-        if (cpuid() == 0) {
-            acquire(&tickslock);
-            ticks++;
-            wakeup(&ticks);
-            release(&tickslock);
-        }
+        acquire(&tickslock);
+        ticks++;
+        release(&tickslock);
+        check_alarms(); // Check alarms after updating ticks
+        wakeup(&ticks);
         set_next_timer();
         return 1;
     } else if (code == SupervisorExternal) {
