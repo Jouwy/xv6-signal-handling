@@ -111,7 +111,7 @@ static volatile int handler5_cnt = 0;
 void handler5(int signo, siginfo_t* info, void* ctx2) {
     assert(signo == SIGUSR0);
     static volatile int nonreentrace = 0;
-    assert(!nonreentrace);    // non-reentrance
+    assert(!nonreentrace);  // non-reentrance
     nonreentrace = 1;
     sleep(5);
     sleep(5);
@@ -209,7 +209,7 @@ void handler7(int signo, siginfo_t* info, void* ctx2) {
     sigset_t pending;
     sigpending(&pending);
     assert_eq(pending, sigmask(SIGUSR1));
-    assert(handler7_flag == 1); // handler7 should not interrupted by SIGUSR1 (handler7_2)
+    assert(handler7_flag == 1);  // handler7 should not interrupted by SIGUSR1 (handler7_2)
     handler7_flag = 2;
 }
 
@@ -230,7 +230,7 @@ void basic7(char* s) {
             .sa_restorer  = sigreturn,
         };
         sigemptyset(&sa.sa_mask);
-        sigaddset(&sa.sa_mask, SIGUSR1); // block SIGUSR1 when handling SIGUSR0
+        sigaddset(&sa.sa_mask, SIGUSR1);  // block SIGUSR1 when handling SIGUSR0
         sigaction(SIGUSR0, &sa, 0);
 
         sigaction_t sa2 = {
@@ -256,7 +256,6 @@ void basic7(char* s) {
 }
 
 // SIG_IGN and SIG_DFL
-/*
 void basic8(char* s) {
     int pid = fork();
     if (pid == 0) {
@@ -266,14 +265,14 @@ void basic8(char* s) {
             .sa_restorer  = NULL,
         };
         sigaction(SIGUSR0, &sa, 0);
-        sigkill(getpid(), SIGUSR0, 0); // should have no effect
+        sigkill(getpid(), SIGUSR0, 0);  // should have no effect
 
         sigaction_t sa2 = {
             .sa_sigaction = SIG_DFL,
             .sa_restorer  = NULL,
         };
         sigaction(SIGUSR1, &sa2, 0);
-        sigkill(getpid(), SIGUSR1, 0); // should terminate the process
+        sigkill(getpid(), SIGUSR1, 0);  // should terminate the process
 
         exit(1);
     } else {
@@ -281,10 +280,9 @@ void basic8(char* s) {
         sigkill(pid, SIGUSR0, 0);
         int ret;
         wait(0, &ret);
-        assert(ret == -10 - SIGUSR1); // child terminated by SIGUSR1
+        assert(ret == -10 - SIGUSR1);  // child terminated by SIGUSR1
     }
 }
-*/
 
 // Base Checkpoint 2: SIGKILL
 
@@ -301,7 +299,7 @@ void basic10(char* s) {
             .sa_sigaction = handler10,
             .sa_restorer  = NULL,
         };
-        sigaction(SIGKILL, &sa, 0); 
+        sigaction(SIGKILL, &sa, 0);
         // set handler for SIGKILL, which should not be called
         while (1);
         exit(1);
@@ -339,7 +337,7 @@ void basic11(char* s) {
 
 // Base Checkpoint 3: signals under fork & exec
 
-void basic20(char *s) {
+void basic20(char* s) {
     // our modification does not affect our parent process.
     // because `run` method in the testsuite will do fork for us.
 
@@ -353,14 +351,14 @@ void basic20(char *s) {
     int pid = fork();
     if (pid == 0) {
         // child
-        sigkill(getpid(), SIGUSR0, 0); 
+        sigkill(getpid(), SIGUSR0, 0);
         // should have no effect, because parent ignores it.
         exit(1);
     } else {
         // parent
         int ret;
         wait(0, &ret);
-        assert(ret == 1); // child should not be terminated by SIGUSR0
+        assert(ret == 1);  // child should not be terminated by SIGUSR0
     }
 }
 
@@ -372,27 +370,23 @@ void wait_n_seconds(int n) {
     fprintf(1, "Finished waiting 2 seconds.\n");
 }
 
-void alarm_handler(int signo, siginfo_t *info, void *ctx) {
+void alarm_handler(int signo, siginfo_t* info, void* ctx) {
     assert(signo == SIGALRM);
     alarm_triggered = 1;
     fprintf(1, "Alarm triggered!\n");
 }
 
 void test_alarm(char* s) {
-    fprintf(1, "hi!\n");
     sigaction_t sa = {
         .sa_sigaction = alarm_handler,
         .sa_restorer  = sigreturn,
     };
-    fprintf(1, "hi2!\n");
     sigemptyset(&sa.sa_mask);
     sigaction(SIGALRM, &sa, 0);
-    fprintf(1, "hi3!\n");
-    unsigned int old = alarm(2); // Set alarm for 2 seconds
-    assert_eq(old, 0);      // Expect no previous alarm
-    fprintf(1, "hi4!\n");
-    while (!alarm_triggered); // Wait until alarm goes off
-    fprintf(1, "hi5!\n");
+    fprintf(1, "alarm(2) triggered, 2 second timer starts\n");
+    unsigned int old = alarm(2);  // Set alarm for 2 seconds
+    assert_eq(old, 0);            // Expect no previous alarm
+    while (!alarm_triggered);     // Wait until alarm goes off
     assert(alarm_triggered);
 }
 
@@ -408,7 +402,7 @@ void test_alarm_remaining(char* s) {
     // Set initial alarm for 5 seconds
     unsigned int remaining = alarm(5);
     fprintf(1, "alarm(5) returns remaining = %d\n", remaining);
-    assert_eq(remaining, 0); // No previous alarm
+    assert_eq(remaining, 0);  // No previous alarm
 
     // Wait 2 seconds
     wait_n_seconds(200);
@@ -426,7 +420,7 @@ void test_alarm_remaining(char* s) {
 
     // Set another alarm and cancel it
     alarm_triggered = 0;
-    remaining = alarm(5);
+    remaining       = alarm(5);
     fprintf(1, "alarm(5) returns remaining = %d\n", remaining);
     assert_eq(remaining, 0);
     wait_n_seconds(200);
@@ -447,7 +441,7 @@ void test_alarm_cancel(char* s) {
     sigemptyset(&sa.sa_mask);
     sigaction(SIGALRM, &sa, 0);
     fprintf(1, "alarm(10) triggered, 10 second timer starts\n");
-    unsigned int remaining = alarm(10); // Set alarm for 2 seconds
+    unsigned int remaining = alarm(10);  // Set alarm for 2 seconds
 
     wait_n_seconds(200);
     remaining = alarm(0);
