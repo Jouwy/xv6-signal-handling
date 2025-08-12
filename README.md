@@ -1,5 +1,11 @@
 # Project Signal - xv6 Kernel Signal Implementation
 
+[*[Original README]*](https://github.com/Layheng-Hok/xv6-signal-handling/blob/signals-6969/OG-README.md)
+
+[*[Project Requirements]*](https://github.com/Layheng-Hok/xv6-signal-handling/blob/signals-6969/docs/Project_Signal_Requirements.pdf)
+
+[*[Project Report]*](https://github.com/Layheng-Hok/xv6-signal-handling/blob/signals-6969/docs/Final_Report.pdf)
+
 ## Overview
 **Project Signal** extends the xv6 operating system kernel with a **POSIX-style signal handling mechanism**, enabling asynchronous communication between processes. This implementation supports sending, receiving, masking, and handling signals, as well as default and custom signal actions.
 
@@ -91,9 +97,9 @@ git clone https://github.com/Layheng-Hok/xv6-signal-handling
 git checkout signals-6969
 
 # Build & run xv6
-make run 					# Starts a single-core
+make run 				# Starts a single-core
 make runsmp				# Starts a multi-core
 
 # In xv6 shell
-$ signal          # Runs provided tests
+$ signal             # Runs provided tests
 ```
